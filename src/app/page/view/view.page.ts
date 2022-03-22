@@ -5,6 +5,9 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { initializeApp } from 'firebase/app';
 import { doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore';
 import { environment } from 'src/environments/environment';
+import { AngularFireAuth } from '@angular/fire/compat/auth';
+import { collection, addDoc } from 'firebase/firestore';
+import { AlertController } from '@ionic/angular';
 
 @Component({
   selector: 'app-view',
@@ -25,11 +28,18 @@ export class ViewPage implements OnInit {
   // Armazena o artigo completo
   art: any;
 
+  // Variável que armazena dados do usuário logado
+  userData: any;
+
+  comment = '';
+
   constructor(
 
     // Injeta dependências
     private activatedRoute: ActivatedRoute,
-    private route: Router
+    private route: Router,
+    public auth: AngularFireAuth,
+    public alertController: AlertController
   ) { }
 
   // 'ngOnInit()' deve ser 'async' por causa do 'await' usado logo abaixo!
@@ -58,5 +68,84 @@ export class ViewPage implements OnInit {
       // Volta para a lista de artigos
       this.route.navigate(['/usuarios']);
     }
+
+    // Verifica se tem usuario logado
+    this.auth.authState.subscribe(user => {
+      if (user) {
+
+        // Armazena os dados do usuário em 'this.user'
+        this.userData = user;
+      }
+    });
   }
+
+  // Salva comentários no banco de dados
+  async sendComment() {
+
+    /**
+     * Sanitiza comentário, se necessário
+     * Retirado do 'MyDocsApp' original:
+     *     https://github.com/Luferat/MyDocsApp/blob/20220119_01/global.js
+     */
+    this.comment = this.comment.replace(/<[^>]*>?/gm, '');
+    this.comment = this.comment.replace(/\n/g, '<br>').trim();
+    this.comment = this.comment.trim();
+
+    // Se existe comentário...
+    if (this.comment !== '') {
+
+      /**
+       * Data de hoje, formatada.
+       * Retirado do 'MyDocsApp' original:
+       *     https://github.com/Luferat/MyDocsApp/blob/20220119_01/global.js
+       */
+      const yourDate = new Date();
+      const now = yourDate.toISOString().replace('T', ' ').split('.')[0];
+
+      // Formata dados para salvar no database
+      const commentData = {
+        name: this.userData.displayName, // Nome do comentarista
+        email: this.userData.email, // E-mail do comentarista
+        photo: this.userData.photoURL, // Foto do comentarista
+        uid: this.userData.uid, // ID do comentarista
+        date: now, // Data atual (UTC)
+        article: this.id, // ID do artigo que esta sendo comentado
+        comment: this.comment // Comentário
+      };
+
+      // Tenta armazenar o comentário em um novo documento da coleção 'comment'
+      try {
+        const docRef = await addDoc(collection(this.db, 'comment'), commentData);
+
+        // Se deu certo, exibe alerta para o usuário
+        this.presentAlert();
+
+        // Limpa o campo para um novo comentário
+        this.comment = '';
+
+        // Se de errado...
+      } catch (e) {
+
+        // Exibe mensagem de erro no console.
+        console.error('Erro ao adicionar documento: ', e);
+      }
+
+    } else {
+
+      // Se não existe comentário, sai sem fazer nada.
+      return false;
+    }
+
+  }
+
+  // Caixa de alerta --> https://ionicframework.com/docs/api/alert
+  async presentAlert() {
+    const alert = await this.alertController.create({
+      header: 'Oba!',
+      message: 'Seu comentário foi enviado com sucesso.',
+      buttons: ['Ok']
+    });
+    await alert.present();
+  }
+
 }
