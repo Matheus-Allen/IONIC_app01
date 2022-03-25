@@ -3,7 +3,7 @@ import { Component, OnInit } from '@angular/core';
 // Importa dependências
 import { ActivatedRoute, Router } from '@angular/router';
 import { initializeApp } from 'firebase/app';
-import { doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { environment } from 'src/environments/environment';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
 import { collection, addDoc } from 'firebase/firestore';
@@ -31,7 +31,9 @@ export class ViewPage implements OnInit {
   // Variável que armazena dados do usuário logado
   userData: any;
 
+  // Armazena comentários
   comment = '';
+  comments: Array<any> = [];
 
   constructor(
 
@@ -62,6 +64,31 @@ export class ViewPage implements OnInit {
         views: (parseInt(this.art.views, 10) + 1).toString()
       });
 
+      // Conecta ao banco de dados e obtém todos os comentários deste artigo
+      onSnapshot(query(
+        collection(this.db, 'comment'),
+        where('article', '==', this.id),
+        where('status', '==', 'on'),
+        orderBy('date', 'desc')
+      ), (myComments) => {
+
+        // Limpa a lista de manuais para carregar novamente.
+        this.comments = [];
+
+        // Loop que itera cada faq obtida
+        myComments.forEach((myDoc) => {
+
+          // Armazena dados na variável 'faq'
+          const myComment = myDoc.data();
+
+          // Adiciona conteúdo de 'faq' em 'faqs' para ser usado na view
+          this.comments.push(myComment);
+
+        });
+
+      });
+
+
       // Se não foi encontrado...
     } else {
 
@@ -75,8 +102,11 @@ export class ViewPage implements OnInit {
 
         // Armazena os dados do usuário em 'this.user'
         this.userData = user;
+
+        console.log(this.userData, this.auth.user);
       }
     });
+
   }
 
   // Salva comentários no banco de dados
@@ -110,7 +140,8 @@ export class ViewPage implements OnInit {
         uid: this.userData.uid, // ID do comentarista
         date: now, // Data atual (UTC)
         article: this.id, // ID do artigo que esta sendo comentado
-        comment: this.comment // Comentário
+        comment: this.comment, // Comentário
+        status: 'on' // Status do comentário
       };
 
       // Tenta armazenar o comentário em um novo documento da coleção 'comment'
@@ -135,7 +166,6 @@ export class ViewPage implements OnInit {
       // Se não existe comentário, sai sem fazer nada.
       return false;
     }
-
   }
 
   // Caixa de alerta --> https://ionicframework.com/docs/api/alert
